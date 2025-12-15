@@ -5,6 +5,5 @@ class BookCreate(BaseModel):
     author: str | None = None
 
 class BookOut(BaseModel):
-    id: int
     title: str
     author: str | None = None

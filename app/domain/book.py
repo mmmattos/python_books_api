@@ -1,7 +1,8 @@
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class Book:
-    id: int
-    title: str
-    author: str | None = None
+    id: Optional[int] = None
+    title: str = ""
+    author: Optional[str] = None
