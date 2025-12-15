@@ -15,5 +15,5 @@ def create_book(
     book: dict,
     service: BooksService = Depends(get_books_service),
 ):
-    # 🚫 DO NOT add here
+    # DO NOT add here
     return service.create(book["title"], book["author"])
