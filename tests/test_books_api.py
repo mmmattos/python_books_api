@@ -46,3 +46,25 @@ def test_list_books_after_create():
     books = r.json()
     assert len(books) == 1
     assert books[0]["title"] == "Clean Code"
+
+def test_update_book():
+    r = client.post("/books", json={"title": "Old", "author": "A"})
+    book_id = r.json()["id"]
+
+    r = client.put(
+        f"/books/{book_id}",
+        json={"title": "New", "author": "B"},
+    )
+    assert r.status_code == 200
+    assert r.json()["title"] == "New"
+
+
+def test_delete_book():
+    r = client.post("/books", json={"title": "Delete Me"})
+    book_id = r.json()["id"]
+
+    r = client.delete(f"/books/{book_id}")
+    assert r.status_code == 204
+
+    r = client.get("/books")
+    assert r.json() == []

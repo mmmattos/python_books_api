@@ -1,9 +1,9 @@
 from pydantic import BaseModel
+from typing import Optional
 
 class BookCreate(BaseModel):
     title: str
-    author: str | None = None
+    author: Optional[str] = None
 
-class BookOut(BaseModel):
-    title: str
-    author: str | None = None
+class BookOut(BookCreate):
+    id: int
