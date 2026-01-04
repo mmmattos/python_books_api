@@ -1,31 +1,25 @@
 from typing import List, Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.application.books_service import BooksService
+from app.presentation.schemas import BookCreate, BookOut, BookUpdate
 from app.presentation.dependencies import get_books_service
-from app.presentation.schemas import BookCreate, BookOut
 
-router = APIRouter(tags=["books"])
+router = APIRouter()
 
 
-@router.get("/books", response_model=List[BookOut])
+@router.get(
+    "/books",
+    response_model=List[BookOut],
+)
 def list_books(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    title: Optional[str] = Query(None),
-    sort: Optional[str] = Query(
-        None,
-        description="Sort by field: id, title, author. Prefix with '-' for DESC.",
-    ),
+    title: Optional[str] = None,
+    sort: Optional[str] = None,
     service: BooksService = Depends(get_books_service),
 ):
-    return service.list(
-        limit=limit,
-        offset=offset,
-        title=title,
-        sort=sort,
-    )
+    return service.list(limit, offset, title, sort)
 
 
 @router.post(
@@ -37,53 +31,31 @@ def create_book(
     book: BookCreate,
     service: BooksService = Depends(get_books_service),
 ):
-    return service.create(
-        title=book.title,
-        author=book.author,
-    )
+    return service.create(book.title, book.author)
 
 
-@router.get("/books/{book_id}", response_model=BookOut)
-def get_book(
-    book_id: int,
-    service: BooksService = Depends(get_books_service),
-):
-    book = service.get(book_id)
-    if not book:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book not found",
-        )
-    return book
-
-
-@router.put("/books/{book_id}", response_model=BookOut)
+@router.put(
+    "/books/{book_id}",
+    response_model=BookOut,
+)
 def update_book(
     book_id: int,
-    book: BookCreate,
+    book: BookUpdate,
     service: BooksService = Depends(get_books_service),
 ):
-    updated = service.update(
-        book_id=book_id,
-        title=book.title,
-        author=book.author,
-    )
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book not found",
-        )
+    updated = service.update(book_id, book.title, book.author)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Book not found")
     return updated
 
 
-@router.delete("/books/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/books/{book_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 def delete_book(
     book_id: int,
     service: BooksService = Depends(get_books_service),
 ):
-    deleted = service.delete(book_id)
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Book not found",
-        )
+    if not service.delete(book_id):
+        raise HTTPException(status_code=404, detail="Book not found")

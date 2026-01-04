@@ -6,26 +6,25 @@ from app.domain.book import Book
 
 class SQLiteBookRepository:
     """
-    SQLite implementation of the Book repository.
+    SQLite implementation of BookRepository.
 
     Notes:
-    - Uses a new connection per operation.
-    - Schema is ensured on EVERY connection to avoid
-      'no such table' issues with SQLite in-memory DBs.
+    - Keeps a single connection alive (required for in-memory DBs).
+    - Repository provides DEFAULTS.
+    - Validation belongs to API / service layer.
     """
 
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._conn = sqlite3.connect(
+            db_path,
+            uri=True,
+            check_same_thread=False,
+        )
+        self._ensure_schema()
 
-    def _connect(self) -> sqlite3.Connection:
-        """
-        Create a connection and ensure schema exists.
-
-        This is critical for SQLite in-memory databases,
-        where schema may not persist across connections.
-        """
-        conn = sqlite3.connect(self.db_path, uri=True)
-        conn.execute(
+    def _ensure_schema(self) -> None:
+        self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS books (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,36 +33,49 @@ class SQLiteBookRepository:
             )
             """
         )
-        return conn
+        self._conn.commit()
 
+    # -----------------------------
+    # Test support
+    # -----------------------------
     def reset(self) -> None:
-        """
-        Used by tests to reset database state.
-        """
-        with self._connect() as conn:
-            conn.execute("DELETE FROM books")
+        self._conn.execute("DELETE FROM books")
+        self._conn.commit()
 
+    # -----------------------------
+    # CRUD operations
+    # -----------------------------
     def create(self, title: str, author: Optional[str]) -> Book:
-        with self._connect() as conn:
-            cur = conn.execute(
-                "INSERT INTO books (title, author) VALUES (?, ?)",
-                (title, author),
-            )
-            book_id = cur.lastrowid
+        cur = self._conn.execute(
+            "INSERT INTO books (title, author) VALUES (?, ?)",
+            (title, author),
+        )
+        self._conn.commit()
 
-        return Book(id=book_id, title=title, author=author)
+        return Book(id=cur.lastrowid, title=title, author=author)
+
+    def get(self, book_id: int) -> Optional[Book]:
+        row = self._conn.execute(
+            "SELECT id, title, author FROM books WHERE id = ?",
+            (book_id,),
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return Book(id=row[0], title=row[1], author=row[2])
 
     def list(
         self,
         limit: int = 20,
         offset: int = 0,
         title: Optional[str] = None,
-        sort: str = "id",
+        sort: Optional[str] = None,
     ) -> List[Book]:
         allowed_sort_fields = {"id", "title", "author"}
 
-        direction = "ASC"
         field = sort or "id"
+        direction = "ASC"
 
         if field.startswith("-"):
             direction = "DESC"
@@ -72,39 +84,26 @@ class SQLiteBookRepository:
         if field not in allowed_sort_fields:
             field = "id"
 
-        query = "SELECT id, title, author FROM books"
+        sql = "SELECT id, title, author FROM books"
         params: list = []
 
         if title:
-            query += " WHERE title LIKE ?"
+            sql += " WHERE title LIKE ?"
             params.append(f"%{title}%")
 
-        query += f" ORDER BY {field} {direction} LIMIT ? OFFSET ?"
+        sql += f" ORDER BY {field} {direction} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
-        with self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
+        rows = self._conn.execute(sql, params).fetchall()
 
         return [Book(id=r[0], title=r[1], author=r[2]) for r in rows]
 
-    def get(self, book_id: int) -> Optional[Book]:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT id, title, author FROM books WHERE id = ?",
-                (book_id,),
-            ).fetchone()
-
-        if not row:
-            return None
-
-        return Book(id=row[0], title=row[1], author=row[2])
-
     def update(self, book_id: int, title: str, author: Optional[str]) -> Optional[Book]:
-        with self._connect() as conn:
-            cur = conn.execute(
-                "UPDATE books SET title = ?, author = ? WHERE id = ?",
-                (title, author, book_id),
-            )
+        cur = self._conn.execute(
+            "UPDATE books SET title = ?, author = ? WHERE id = ?",
+            (title, author, book_id),
+        )
+        self._conn.commit()
 
         if cur.rowcount == 0:
             return None
@@ -112,10 +111,10 @@ class SQLiteBookRepository:
         return Book(id=book_id, title=title, author=author)
 
     def delete(self, book_id: int) -> bool:
-        with self._connect() as conn:
-            cur = conn.execute(
-                "DELETE FROM books WHERE id = ?",
-                (book_id,),
-            )
+        cur = self._conn.execute(
+            "DELETE FROM books WHERE id = ?",
+            (book_id,),
+        )
+        self._conn.commit()
 
         return cur.rowcount > 0

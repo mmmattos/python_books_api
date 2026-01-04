@@ -5,5 +5,13 @@ class BookCreate(BaseModel):
     title: str
     author: Optional[str] = None
 
-class BookOut(BookCreate):
+
+class BookUpdate(BaseModel):
+    title: str
+    author: Optional[str] = None
+
+
+class BookOut(BaseModel):
     id: int
+    title: str
+    author: Optional[str] = None
